@@ -1,6 +1,19 @@
 # Router
 
-**TODO: Add description**
+A minimal path router with `{variable}` placeholders, backed by a trie for
+fast matching.
+
+```elixir
+router =
+  Router.new()
+  |> Router.route("users/{id}", :show_user)
+
+Router.match(router, "users/42")
+#=> {:ok, %{"id" => "42"}, :show_user}
+
+Router.match(router, "nope")
+#=> {:error, :no_match}
+```
 
 ## Installation
 
@@ -18,4 +31,3 @@ end
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/router>.
-

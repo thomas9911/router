@@ -1,5 +1,6 @@
 defmodule RouterTest do
   use ExUnit.Case
+  doctest Router
 
   describe "parse/1" do
     test "parses plain text with no variables" do

@@ -7,9 +7,20 @@ defmodule Router do
   `match/2` to get back the captured variables and the value that was
   routed to.
 
+  ```elixir
       iex> router = Router.new() |> Router.route("users/{id}", :show_user)
       iex> Router.match(router, "users/42")
       {:ok, %{"id" => "42"}, :show_user}
+  ```
+
+  ```elixir
+      iex> router = Router.new()
+      ...>          |> Router.route("users/{id}", fn arguments -> "fetch user with " <> inspect(arguments) end)
+      ...>          |> Router.route("posts/{id}", fn arguments -> "fetch post with " <> inspect(arguments) end)
+      iex> {:ok, data, func} = Router.match(router, "users/42")
+      iex> func.(data)
+      ~s|fetch user with %{"id" => "42"}|
+  ```
 
   Routes are matched via a trie built from the registered templates'
   shared prefixes, rather than by retrying every template from scratch.
