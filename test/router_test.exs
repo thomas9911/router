@@ -95,5 +95,29 @@ defmodule RouterTest do
         Router.new() |> Router.route("a{b}{c}/d", 1)
       end
     end
+
+    test "does not match a path longer than the template" do
+      router = Router.new() |> Router.route("a", 1)
+
+      assert Router.match(router, "ab") == {:error, :no_match}
+    end
+
+    test "does not match a path shorter than the template" do
+      router = Router.new() |> Router.route("ab", 1)
+
+      assert Router.match(router, "a") == {:error, :no_match}
+    end
+
+    test "does not match when a variable never reaches its trailing literal text" do
+      router = Router.new() |> Router.route("a{x}b", :mid)
+
+      assert Router.match(router, "aFOO") == {:error, :no_match}
+    end
+
+    test "matches an empty capture for a variable that trails the template" do
+      router = Router.new() |> Router.route("hallo/{x}", 2)
+
+      assert Router.match(router, "hallo/") == {:ok, %{}, 2}
+    end
   end
 end
