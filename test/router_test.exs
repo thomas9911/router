@@ -81,13 +81,13 @@ defmodule RouterTest do
       assert Router.match(Router.new(), "anything") == {:error, :no_match}
     end
 
-    test "prefers the most recently added route when templates overlap" do
+    test "prefers the first added route when templates overlap" do
       router =
         Router.new()
         |> Router.route("a/{x}", :first)
         |> Router.route("a/{x}", :second)
 
-      assert Router.match(router, "a/foo") == {:ok, %{"x" => "foo"}, :second}
+      assert Router.match(router, "a/foo") == {:ok, %{"x" => "foo"}, :first}
     end
 
     test "raises when two variables are adjacent with no text between them" do
@@ -118,6 +118,29 @@ defmodule RouterTest do
       router = Router.new() |> Router.route("hallo/{x}", 2)
 
       assert Router.match(router, "hallo/") == {:ok, %{}, 2}
+    end
+
+    test "a more specific route registered before an overlapping general one wins" do
+      router =
+        Router.new()
+        |> Router.route("test/hello/bye/{rest}", :specific)
+        |> Router.route("test/hello/{rest}", :general)
+
+      assert Router.match(router, "test/hello/bye/foo") ==
+               {:ok, %{"rest" => "foo"}, :specific}
+
+      assert Router.match(router, "test/hello/other") ==
+               {:ok, %{"rest" => "other"}, :general}
+    end
+
+    test "a general route registered before a more specific overlapping one shadows it" do
+      router =
+        Router.new()
+        |> Router.route("test/hello/{rest}", :general)
+        |> Router.route("test/hello/bye/{rest}", :specific)
+
+      assert Router.match(router, "test/hello/bye/foo") ==
+               {:ok, %{"rest" => "bye/foo"}, :general}
     end
   end
 end

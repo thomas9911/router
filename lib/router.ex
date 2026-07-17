@@ -11,8 +11,8 @@ defmodule Router do
       iex> Router.match(router, "users/42")
       {:ok, %{"id" => "42"}, :show_user}
 
-  If two registered templates overlap, `match/2` prefers the one most
-  recently added via `route/3`.
+  If two registered templates overlap, `match/2` prefers whichever one
+  was registered first via `route/3`.
   """
 
   defstruct data: %{}, compiled_templates: []
@@ -39,7 +39,7 @@ defmodule Router do
     %{
       router
       | compiled_templates: [compiled | compiled_templates],
-        data: Map.put(data, compiled, value)
+        data: Map.put_new(data, compiled, value)
     }
   end
 
@@ -63,6 +63,7 @@ defmodule Router do
     chars = String.graphemes(path)
 
     compiled_templates
+    |> Enum.reverse()
     |> Enum.reduce_while({:error, :no_match}, fn compiled, _ ->
       case match_template(compiled, chars) do
         {:ok, vars} -> {:halt, {:ok, vars, Map.get(data, compiled)}}
