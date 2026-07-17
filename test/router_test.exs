@@ -133,14 +133,20 @@ defmodule RouterTest do
                {:ok, %{"rest" => "other"}, :general}
     end
 
-    test "a general route registered before a more specific overlapping one shadows it" do
+    test "a more specific route wins over an overlapping general one regardless of registration order" do
       router =
         Router.new()
         |> Router.route("test/hello/{rest}", :general)
         |> Router.route("test/hello/bye/{rest}", :specific)
 
       assert Router.match(router, "test/hello/bye/foo") ==
-               {:ok, %{"rest" => "bye/foo"}, :general}
+               {:ok, %{"rest" => "foo"}, :specific}
+    end
+
+    test "matches a multi-byte UTF-8 boundary character correctly" do
+      router = Router.new() |> Router.route("a{x}é", :accented)
+
+      assert Router.match(router, "aFOOé") == {:ok, %{"x" => "FOO"}, :accented}
     end
   end
 end

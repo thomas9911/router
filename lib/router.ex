@@ -1,6 +1,6 @@
 defmodule Router do
   @moduledoc """
-  A minimal path router with `{variable}` placeholders.
+  A minimal path router with `{variable}` placeholders, backed by a trie.
 
   Register routes with `route/3` using a path template such as
   `"users/{id}/posts/{post_id}"`, then look up an incoming path with
@@ -11,18 +11,25 @@ defmodule Router do
       iex> Router.match(router, "users/42")
       {:ok, %{"id" => "42"}, :show_user}
 
-  If two registered templates overlap, `match/2` prefers whichever one
-  was registered first via `route/3`.
+  Routes are matched via a trie built from the registered templates'
+  shared prefixes, rather than by retrying every template from scratch.
+  At any point where a template continues with literal text and another
+  continues with a `{variable}`, the literal (static) branch is always
+  tried first, regardless of which route was registered first. Only
+  between two equally dynamic overlapping routes (e.g. the same template
+  registered twice) does registration order act as the tie-break: the
+  one registered first wins.
   """
 
-  defstruct data: %{}, compiled_templates: []
+  defstruct root: %{literal: %{}, vars: [], accept: :none}
 
   @type token :: {:text, String.t()} | {:var, String.t()}
-  @type compiled_template :: [String.t() | {String.t(), String.t()}]
-  @type t :: %__MODULE__{
-          data: %{optional(compiled_template()) => any()},
-          compiled_templates: [compiled_template()]
+  @type trie_node :: %{
+          literal: %{String.t() => trie_node()},
+          vars: [%{name: String.t(), boundary: String.t() | nil, node: trie_node()}],
+          accept: :none | {:value, any()}
         }
+  @type t :: %__MODULE__{root: trie_node()}
 
   @doc "Builds an empty router."
   @spec new() :: t()
@@ -33,14 +40,8 @@ defmodule Router do
   `{variable_name}` placeholders.
   """
   @spec route(t(), String.t(), any()) :: t()
-  def route(%__MODULE__{data: data, compiled_templates: compiled_templates} = router, path, value) do
-    compiled = path |> parse() |> compile_template()
-
-    %{
-      router
-      | compiled_templates: [compiled | compiled_templates],
-        data: Map.put_new(data, compiled, value)
-    }
+  def route(%__MODULE__{root: root} = router, path, value) do
+    %{router | root: insert(root, parse(path), value)}
   end
 
   @doc """
@@ -55,21 +56,14 @@ defmodule Router do
   end
 
   @doc """
-  Matches `path` against every registered route, most-recently-registered
-  first, and returns the first hit.
+  Matches `path` against the registered routes and returns the first hit.
   """
   @spec match(t(), String.t()) :: {:ok, %{String.t() => String.t()}, any()} | {:error, :no_match}
-  def match(%__MODULE__{data: data, compiled_templates: compiled_templates}, path) do
-    chars = String.graphemes(path)
-
-    compiled_templates
-    |> Enum.reverse()
-    |> Enum.reduce_while({:error, :no_match}, fn compiled, _ ->
-      case match_template(compiled, chars) do
-        {:ok, vars} -> {:halt, {:ok, vars, Map.get(data, compiled)}}
-        :no_match -> {:cont, {:error, :no_match}}
-      end
-    end)
+  def match(%__MODULE__{root: root}, path) do
+    case match_node(root, String.graphemes(path)) do
+      {:ok, vars, value} -> {:ok, vars, value}
+      :no_match -> {:error, :no_match}
+    end
   end
 
   defp do_parse("", [{:text, ""} | rest]), do: Enum.reverse(rest)
@@ -99,69 +93,89 @@ defmodule Router do
     end
   end
 
-  # Flattens parsed tokens into the structure `match_template/2` walks
-  # character by character: literal text becomes individual grapheme
-  # strings, and each variable becomes a `{name, boundary_char}` marker,
-  # where `boundary_char` is the first character of the literal text that
-  # follows it (or "" when the variable is the last thing in the
-  # template). That invariant is what lets `match_char/2` recognize the
-  # end of a capture without look-ahead.
-  @spec compile_template([token()]) :: compiled_template()
-  defp compile_template(tokens), do: compile_template(tokens, [])
+  defp empty_node, do: %{literal: %{}, vars: [], accept: :none}
 
-  defp compile_template([], acc), do: Enum.reverse(acc)
-
-  defp compile_template([{:text, text} | rest], acc) do
-    chars = text |> String.graphemes() |> Enum.reverse()
-    compile_template(rest, chars ++ acc)
-  end
-
-  defp compile_template([{:var, name}, {:text, next} | rest], acc) do
-    if next == "" do
-      raise "invalid template, variables cannot be after each other"
-    end
-
-    <<boundary, _::bytes>> = next
-    compile_template([{:text, next} | rest], [{name, <<boundary>>} | acc])
-  end
-
-  defp compile_template([{:var, name}], acc) do
-    compile_template([], [{name, ""} | acc])
-  end
-
-  defp match_template(compiled, chars) do
-    chars
-    |> Enum.reduce_while(%{template: compiled, vars: %{}}, &match_char/2)
-    |> case do
-      %{template: [], vars: vars} -> {:ok, vars}
-      # a trailing variable's boundary marker is left over on purpose: it
-      # swallows the rest of the path, including zero characters.
-      %{template: [{_var, ""}], vars: vars} -> {:ok, vars}
-      _ -> :no_match
+  defp insert(node, [], value) do
+    case node.accept do
+      :none -> %{node | accept: {:value, value}}
+      _ -> node
     end
   end
 
-  # the path has more characters than the template does; no candidate
-  # template can grow to accept them.
-  defp match_char(_char, %{template: []}), do: {:halt, :no_match}
+  defp insert(node, [{:text, text} | rest], value) do
+    insert_chars(node, String.graphemes(text), rest, value)
+  end
 
-  defp match_char(char, %{template: [token | rest], vars: vars}) do
-    case token do
-      {_var, ^char} ->
-        # `char` both closes the capture and is the literal character that
-        # follows it in the template, so this step satisfies both and
-        # drops that literal from `rest` too.
-        {:cont, %{template: Enum.drop(rest, 1), vars: vars}}
+  defp insert(_node, [{:var, _name}, {:text, ""} | _rest], _value) do
+    raise "invalid template, variables cannot be after each other"
+  end
 
-      {var_name, _boundary} ->
-        captured = Map.get(vars, var_name, "")
-        {:cont, %{template: [token | rest], vars: Map.put(vars, var_name, captured <> char)}}
+  defp insert(node, [{:var, name}, {:text, next} | rest], value) do
+    boundary = String.first(next)
+    target = insert(empty_node(), [{:text, next} | rest], value)
+    %{node | vars: node.vars ++ [%{name: name, boundary: boundary, node: target}]}
+  end
 
-      ^char ->
-        {:cont, %{template: rest, vars: vars}}
+  defp insert(node, [{:var, name}], value) do
+    target = insert(empty_node(), [], value)
+    %{node | vars: node.vars ++ [%{name: name, boundary: nil, node: target}]}
+  end
 
-      _ ->
-        {:halt, :no_match}
+  defp insert_chars(node, [], remaining_tokens, value), do: insert(node, remaining_tokens, value)
+
+  defp insert_chars(node, [char | chars], remaining_tokens, value) do
+    child = Map.get(node.literal, char, empty_node())
+    updated_child = insert_chars(child, chars, remaining_tokens, value)
+    %{node | literal: Map.put(node.literal, char, updated_child)}
+  end
+
+  defp match_node(node, []) do
+    case node.accept do
+      {:value, value} -> {:ok, %{}, value}
+      :none -> match_var_edges(node.vars, [])
     end
   end
+
+  defp match_node(node, [char | rest] = chars) do
+    case Map.fetch(node.literal, char) do
+      {:ok, child} ->
+        case match_node(child, rest) do
+          {:ok, _vars, _value} = success -> success
+          :no_match -> match_var_edges(node.vars, chars)
+        end
+
+      :error ->
+        match_var_edges(node.vars, chars)
+    end
+  end
+
+  defp match_var_edges([], _chars), do: :no_match
+
+  defp match_var_edges([%{name: name, boundary: boundary, node: target} | rest_edges], chars) do
+    case consume_var(chars, boundary) do
+      {:ok, captured, remaining} ->
+        case match_node(target, remaining) do
+          {:ok, vars, value} ->
+            vars = if captured == "", do: vars, else: Map.put(vars, name, captured)
+            {:ok, vars, value}
+
+          :no_match ->
+            match_var_edges(rest_edges, chars)
+        end
+
+      :no_match ->
+        match_var_edges(rest_edges, chars)
+    end
+  end
+
+  defp consume_var(chars, nil), do: {:ok, Enum.join(chars), []}
+  defp consume_var(chars, boundary), do: consume_var(chars, boundary, [])
+
+  defp consume_var([], _boundary, _acc), do: :no_match
+
+  defp consume_var([char | rest], boundary, acc) when char == boundary do
+    {:ok, acc |> Enum.reverse() |> Enum.join(), [char | rest]}
+  end
+
+  defp consume_var([char | rest], boundary, acc), do: consume_var(rest, boundary, [char | acc])
 end
