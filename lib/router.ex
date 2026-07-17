@@ -32,7 +32,11 @@ defmodule Router do
   end
 
   defp do_parse(<<f, rest::bytes>>, []) do
-    do_parse(rest, [{:text, <<f>>}])
+    cond do
+      f == ?{ -> do_parse(rest, [{:var, ""}])
+      f == ?} -> raise "invalid end"
+      true -> do_parse(rest, [{:text, <<f>>}])
+    end
   end
 
   defp do_parse(<<f, rest::bytes>>, [{:text, first} | xd]) do
