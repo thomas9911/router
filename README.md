@@ -15,6 +15,11 @@ Router.match(router, "nope")
 #=> {:error, :no_match}
 ```
 
+## Tip
+
+Consider building your router as a module attribute (`@router = ...`) when you know the paths upfront, rather than in a function. 
+This will build it once at compile time instead of rebuilding it on every call.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed
