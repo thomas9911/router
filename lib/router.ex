@@ -66,7 +66,7 @@ defmodule Router do
 
   @doc "Builds an empty router."
   @spec new() :: t()
-  def new(), do: %__MODULE__{}
+  def new, do: %__MODULE__{}
 
   @doc """
   Registers `value` under `path`, a template that may contain
@@ -251,7 +251,10 @@ defmodule Router do
   end
 
   defp cast_capture(<<_::utf8, _::binary>> = captured, :hex) do
-    if captured |> String.to_charlist() |> Enum.all?(&hex_digit?/1) do
+    captured
+    |> String.to_charlist()
+    |> Enum.all?(&hex_digit?/1)
+    |> if do
       {:ok, captured}
     else
       :no_match

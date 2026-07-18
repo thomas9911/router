@@ -1,5 +1,6 @@
 defmodule RouterTest do
   use ExUnit.Case
+
   doctest Router
 
   describe "parse/1" do
@@ -75,7 +76,7 @@ defmodule RouterTest do
 
   describe "route/3 and match/2" do
     test "matches a static route" do
-      router = Router.new() |> Router.route("hallo/xd", 3)
+      router = Router.route(Router.new(), "hallo/xd", 3)
 
       assert Router.match(router, "hallo/xd") == {:ok, %{}, 3}
     end
@@ -91,62 +92,62 @@ defmodule RouterTest do
     end
 
     test "matches a route whose template starts with a variable" do
-      router = Router.new() |> Router.route("{id}/edit", :edit)
+      router = Router.route(Router.new(), "{id}/edit", :edit)
 
       assert Router.match(router, "42/edit") == {:ok, %{"id" => "42"}, :edit}
     end
 
     test "captures a variable embedded between static text" do
-      router = Router.new() |> Router.route("a{x}b", :mid)
+      router = Router.route(Router.new(), "a{x}b", :mid)
 
       assert Router.match(router, "aFOOb") == {:ok, %{"x" => "FOO"}, :mid}
     end
 
     test "matches an integer-filtered variable and casts it to an integer" do
-      router = Router.new() |> Router.route("user/{id:int}/", :user)
+      router = Router.route(Router.new(), "user/{id:int}/", :user)
 
       assert Router.match(router, "user/42/") == {:ok, %{"id" => 42}, :user}
     end
 
     test "rejects a non-integer for an integer-filtered variable" do
-      router = Router.new() |> Router.route("user/{id:int}/", :user)
+      router = Router.route(Router.new(), "user/{id:int}/", :user)
 
       assert Router.match(router, "user/abc/") == {:error, :no_match}
     end
 
     test "rejects an empty integer-filtered trailing variable" do
-      router = Router.new() |> Router.route("user/{id:int}", :user)
+      router = Router.route(Router.new(), "user/{id:int}", :user)
 
       assert Router.match(router, "user/") == {:error, :no_match}
     end
 
     test "matches a hexadecimal-filtered variable" do
-      router = Router.new() |> Router.route("user/{id:hex}/", :user)
+      router = Router.route(Router.new(), "user/{id:hex}/", :user)
 
       assert Router.match(router, "user/0aF9/") ==
                {:ok, %{"id" => "0aF9"}, :user}
     end
 
     test "rejects non-hexadecimal characters" do
-      router = Router.new() |> Router.route("user/{id:hex}/", :user)
+      router = Router.route(Router.new(), "user/{id:hex}/", :user)
 
       assert Router.match(router, "user/0aG9/") == {:error, :no_match}
     end
 
     test "rejects an empty hexadecimal-filtered trailing variable" do
-      router = Router.new() |> Router.route("user/{id:hex}", :user)
+      router = Router.route(Router.new(), "user/{id:hex}", :user)
 
       assert Router.match(router, "user/") == {:error, :no_match}
     end
 
     test "raises while routing with an unknown filter" do
       assert_raise RuntimeError, "unknown filter", fn ->
-        Router.new() |> Router.route("user/{id:uuid}", :user)
+        Router.route(Router.new(), "user/{id:uuid}", :user)
       end
     end
 
     test "returns an error tuple when nothing matches" do
-      router = Router.new() |> Router.route("hallo/xd", 3)
+      router = Router.route(Router.new(), "hallo/xd", 3)
 
       assert Router.match(router, "nope") == {:error, :no_match}
     end
@@ -166,30 +167,30 @@ defmodule RouterTest do
 
     test "raises when two variables are adjacent with no text between them" do
       assert_raise RuntimeError, "invalid template, variables cannot be after each other", fn ->
-        Router.new() |> Router.route("a{b}{c}/d", 1)
+        Router.route(Router.new(), "a{b}{c}/d", 1)
       end
     end
 
     test "does not match a path longer than the template" do
-      router = Router.new() |> Router.route("a", 1)
+      router = Router.route(Router.new(), "a", 1)
 
       assert Router.match(router, "ab") == {:error, :no_match}
     end
 
     test "does not match a path shorter than the template" do
-      router = Router.new() |> Router.route("ab", 1)
+      router = Router.route(Router.new(), "ab", 1)
 
       assert Router.match(router, "a") == {:error, :no_match}
     end
 
     test "does not match when a variable never reaches its trailing literal text" do
-      router = Router.new() |> Router.route("a{x}b", :mid)
+      router = Router.route(Router.new(), "a{x}b", :mid)
 
       assert Router.match(router, "aFOO") == {:error, :no_match}
     end
 
     test "matches an empty capture for a variable that trails the template" do
-      router = Router.new() |> Router.route("hallo/{x}", 2)
+      router = Router.route(Router.new(), "hallo/{x}", 2)
 
       assert Router.match(router, "hallo/") == {:ok, %{}, 2}
     end
@@ -218,7 +219,7 @@ defmodule RouterTest do
     end
 
     test "matches a multi-byte UTF-8 boundary character correctly" do
-      router = Router.new() |> Router.route("a{x}é", :accented)
+      router = Router.route(Router.new(), "a{x}é", :accented)
 
       assert Router.match(router, "aFOOé") == {:ok, %{"x" => "FOO"}, :accented}
     end
