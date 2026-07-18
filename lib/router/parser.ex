@@ -1,7 +1,7 @@
 defmodule Router.Parser do
   @moduledoc false
 
-  @type filter :: :int | :hex
+  @type filter :: :int | :hex | {:hex, pos_integer()}
   @type var_token :: %{name: String.t(), filter: filter() | nil}
   @type token :: {:text, String.t()} | {:var, var_token()}
 
@@ -54,5 +54,13 @@ defmodule Router.Parser do
 
   defp parse_filter("int"), do: :int
   defp parse_filter("hex"), do: :hex
+
+  defp parse_filter(<<"hex(", rest::binary>>) do
+    case Integer.parse(rest) do
+      {length, ")"} when length > 0 -> {:hex, length}
+      _ -> raise "invalid filter"
+    end
+  end
+
   defp parse_filter(_filter), do: raise("unknown filter")
 end

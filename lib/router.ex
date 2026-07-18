@@ -41,6 +41,7 @@ defmodule Router do
   Variables may declare filters via `{name:filter}`. Supported filters are
   normalized to atoms internally. `int` validates and casts integers, while
   `hex` validates non-empty hexadecimal segments and returns them as strings.
+  A fixed length can be specified with `hex(8)`.
 
   Routes may optionally be tagged, for example `{:get, "users/{id}"}`.
   Tagged routes are matched with `{:get, "users/42"}`; untagged routes

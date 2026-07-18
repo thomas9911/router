@@ -115,18 +115,21 @@ defmodule Router.Trie do
     end
   end
 
-  defp cast_capture(<<_::utf8, _::binary>> = captured, :hex) do
-    captured
-    |> String.to_charlist()
-    |> Enum.all?(&hex_digit?/1)
-    |> if do
+  defp cast_capture(captured, :hex), do: cast_hex(captured, nil)
+  defp cast_capture(captured, {:hex, length}), do: cast_hex(captured, length)
+
+  defp cast_hex(<<_::utf8, _::binary>> = captured, length) do
+    valid_length? = is_nil(length) or String.length(captured) == length
+    valid_digits? = captured |> String.to_charlist() |> Enum.all?(&hex_digit?/1)
+
+    if valid_length? and valid_digits? do
       {:ok, captured}
     else
       :no_match
     end
   end
 
-  defp cast_capture(_captured, :hex), do: :no_match
+  defp cast_hex(_captured, _length), do: :no_match
 
   defp hex_digit?(char) when char in ?0..?9, do: true
   defp hex_digit?(char) when char in ?a..?f, do: true

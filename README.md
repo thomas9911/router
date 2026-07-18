@@ -39,6 +39,7 @@ internally. The built-in `int` filter only matches segments that parse as
 integers, and successful matches are returned as integers.
 The `hex` filter matches non-empty segments containing only `0-9`, `a-f`, or
 `A-F`, and successful matches are returned as strings.
+A fixed length can be specified, for example `{token:hex(8)}`.
 
 ## Tip
 

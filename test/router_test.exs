@@ -79,6 +79,27 @@ defmodule RouterTest do
       assert Router.match(router, "user/") == {:error, :no_match}
     end
 
+    test "parses a fixed-length hexadecimal filter" do
+      assert Router.Parser.parse("user/{token:hex(8)}") ==
+               [text: "user/", var: %{name: "token", filter: {:hex, 8}}]
+    end
+
+    test "matches a fixed-length hexadecimal variable" do
+      router = Router.route(Router.new(), "user/{token:hex(8)}", :user)
+
+      assert Router.match(router, "user/0aF9123B") ==
+               {:ok, %{"token" => "0aF9123B"}, :user}
+
+      assert Router.match(router, "user/0aF9123") == {:error, :no_match}
+      assert Router.match(router, "user/0aF9123BC") == {:error, :no_match}
+    end
+
+    test "rejects an invalid hexadecimal filter length" do
+      assert_raise RuntimeError, "invalid filter", fn ->
+        Router.Parser.parse("user/{token:hex(0)}")
+      end
+    end
+
     test "matches a hexadecimal-filtered variable" do
       router = Router.route(Router.new(), "user/{id:hex}/", :user)
 
