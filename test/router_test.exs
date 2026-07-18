@@ -95,9 +95,11 @@ defmodule RouterTest do
     end
 
     test "rejects an invalid hexadecimal filter length" do
-      assert_raise RuntimeError, "invalid filter", fn ->
-        Router.Parser.parse("user/{token:hex(0)}")
-      end
+      assert_raise RuntimeError,
+                   "invalid filter 'hex(0)': length must be a positive integer",
+                   fn ->
+                     Router.Parser.parse("user/{token:hex(0)}")
+                   end
     end
 
     test "matches a hexadecimal-filtered variable" do
@@ -120,9 +122,11 @@ defmodule RouterTest do
     end
 
     test "raises while routing with an unknown filter" do
-      assert_raise RuntimeError, "unknown filter", fn ->
-        Router.route(Router.new(), "user/{id:uuid}", :user)
-      end
+      assert_raise RuntimeError,
+                   "could not register route 'user/{id:uuid}': unknown filter: 'uuid'; supported filters: int, hex, hex(length)",
+                   fn ->
+                     Router.route(Router.new(), "user/{id:uuid}", :user)
+                   end
     end
 
     test "returns an error tuple when nothing matches" do
@@ -145,9 +149,11 @@ defmodule RouterTest do
     end
 
     test "raises when two variables are adjacent with no text between them" do
-      assert_raise RuntimeError, "invalid template, variables cannot be after each other", fn ->
-        Router.route(Router.new(), "a{b}{c}/d", 1)
-      end
+      assert_raise RuntimeError,
+                   ~s|could not register route 'a{b}{c}/d': invalid route template: variables cannot be adjacent; add literal text between them|,
+                   fn ->
+                     Router.route(Router.new(), "a{b}{c}/d", 1)
+                   end
     end
 
     test "does not match a path longer than the template" do

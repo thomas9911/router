@@ -30,7 +30,7 @@ defmodule Router.Trie do
   end
 
   def insert(_node, [{:var, _var}, {:text, ""} | _rest], _value) do
-    raise "invalid template, variables cannot be after each other"
+    raise "invalid route template: variables cannot be adjacent; add literal text between them"
   end
 
   def insert(node, [{:var, %{name: name, filter: filter}}, {:text, next} | rest], value) do

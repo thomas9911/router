@@ -63,13 +63,17 @@ defmodule Router do
   @spec route(t(), String.t() | {tag(), String.t()}, any()) :: t()
   def route(%__MODULE__{tagged: tagged} = router, {tag, path}, value)
       when is_atom(tag) and is_binary(path) do
-    root = Map.get(tagged, tag, Router.Trie.new())
-    tagged = Map.put(tagged, tag, Router.Trie.insert(root, Router.Parser.parse(path), value))
-    %{router | tagged: tagged}
+    register_route({tag, path}, fn ->
+      root = Map.get(tagged, tag, Router.Trie.new())
+      tagged = Map.put(tagged, tag, Router.Trie.insert(root, Router.Parser.parse(path), value))
+      %{router | tagged: tagged}
+    end)
   end
 
   def route(%__MODULE__{root: root} = router, path, value) when is_binary(path) do
-    %{router | root: Router.Trie.insert(root, Router.Parser.parse(path), value)}
+    register_route(path, fn ->
+      %{router | root: Router.Trie.insert(root, Router.Parser.parse(path), value)}
+    end)
   end
 
   @doc "Matches a path, optionally tagged as `{tag, path}`, against the registered routes."
@@ -83,6 +87,15 @@ defmodule Router do
   end
 
   def match(%__MODULE__{root: root}, path) when is_binary(path), do: match_root(root, path)
+
+  defp register_route(pattern, fun) do
+    fun.()
+  rescue
+    error in RuntimeError ->
+      reraise RuntimeError,
+              [message: "could not register route '#{pattern}': #{error.message}"],
+              __STACKTRACE__
+  end
 
   defp match_root(root, path) do
     case Router.Trie.match(root, String.graphemes(path)) do

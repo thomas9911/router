@@ -47,15 +47,17 @@ defmodule Router.ParserTest do
     end
 
     test "raises on a stray closing brace with no open variable" do
-      assert_raise RuntimeError, "invalid end", fn ->
+      assert_raise RuntimeError, "invalid route template: unexpected closing brace", fn ->
         Router.Parser.parse("a}")
       end
     end
 
     test "raises on a nested opening brace" do
-      assert_raise RuntimeError, "invalid start", fn ->
-        Router.Parser.parse("a{b{c}")
-      end
+      assert_raise RuntimeError,
+                   "invalid route template: unexpected opening brace inside a variable",
+                   fn ->
+                     Router.Parser.parse("a{b{c}")
+                   end
     end
 
     test "parses a variable that starts the template" do
@@ -63,21 +65,23 @@ defmodule Router.ParserTest do
     end
 
     test "raises on a stray closing brace as the very first character" do
-      assert_raise RuntimeError, "invalid end", fn ->
+      assert_raise RuntimeError, "invalid route template: unexpected closing brace", fn ->
         Router.Parser.parse("}a")
       end
     end
 
     test "raises on an invalid filtered variable" do
-      assert_raise RuntimeError, "invalid variable", fn ->
+      assert_raise RuntimeError, "invalid variable: filter is empty, remove the ':'", fn ->
         Router.Parser.parse("{id:}")
       end
     end
 
     test "raises on an unknown filter" do
-      assert_raise RuntimeError, "unknown filter", fn ->
-        Router.Parser.parse("{id:uuid}")
-      end
+      assert_raise RuntimeError,
+                   "unknown filter: 'uuid'; supported filters: int, hex, hex(length)",
+                   fn ->
+                     Router.Parser.parse("{id:uuid}")
+                   end
     end
   end
 end
