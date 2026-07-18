@@ -40,12 +40,13 @@ defmodule Router do
   Variables may also declare a filter via `{name:filter}`. Supported
   filters are normalized to atoms internally. The built-in `int` filter
   only matches segments that parse as integers and returns them as
-  integers in the match result.
+  integers in the match result. The `hex` filter only matches non-empty
+  hexadecimal segments (`0-9`, `a-f`, or `A-F`).
   """
 
   defstruct root: %{literal: %{}, vars: [], accept: :none}
 
-  @type filter :: :int
+  @type filter :: :int | :hex
   @type var_token :: %{name: String.t(), filter: filter() | nil}
   @type token :: {:text, String.t()} | {:var, var_token()}
   @type capture_value :: String.t() | integer()
@@ -237,6 +238,7 @@ defmodule Router do
   end
 
   defp parse_filter("int"), do: :int
+  defp parse_filter("hex"), do: :hex
   defp parse_filter(_filter), do: raise("unknown filter")
 
   defp cast_capture(captured, nil), do: {:ok, captured}
@@ -247,4 +249,19 @@ defmodule Router do
       _ -> :no_match
     end
   end
+
+  defp cast_capture(<<_::utf8, _::binary>> = captured, :hex) do
+    if captured |> String.to_charlist() |> Enum.all?(&hex_digit?/1) do
+      {:ok, captured}
+    else
+      :no_match
+    end
+  end
+
+  defp cast_capture(_captured, :hex), do: :no_match
+
+  defp hex_digit?(char) when char in ?0..?9, do: true
+  defp hex_digit?(char) when char in ?a..?f, do: true
+  defp hex_digit?(char) when char in ?A..?F, do: true
+  defp hex_digit?(_char), do: false
 end

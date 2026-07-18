@@ -23,6 +23,8 @@ Variables can optionally declare filters with `{name:filter}`. Supported
 filters are validated when the route is parsed and normalized to atoms
 internally. The built-in `int` filter only matches segments that parse as
 integers, and successful matches are returned as integers.
+The `hex` filter matches non-empty segments containing only `0-9`, `a-f`, or
+`A-F`, and successful matches are returned as strings.
 
 ## Tip
 

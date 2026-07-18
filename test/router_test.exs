@@ -33,6 +33,11 @@ defmodule RouterTest do
                [text: "user/", var: %{name: "id", filter: :int}, text: "/"]
     end
 
+    test "parses a hex variable filter as an atom" do
+      assert Router.parse("user/{id:hex}/") ==
+               [text: "user/", var: %{name: "id", filter: :hex}, text: "/"]
+    end
+
     test "raises on a stray closing brace with no open variable" do
       assert_raise RuntimeError, "invalid end", fn ->
         Router.parse("a}")
@@ -111,6 +116,25 @@ defmodule RouterTest do
 
     test "rejects an empty integer-filtered trailing variable" do
       router = Router.new() |> Router.route("user/{id:int}", :user)
+
+      assert Router.match(router, "user/") == {:error, :no_match}
+    end
+
+    test "matches a hexadecimal-filtered variable" do
+      router = Router.new() |> Router.route("user/{id:hex}/", :user)
+
+      assert Router.match(router, "user/0aF9/") ==
+               {:ok, %{"id" => "0aF9"}, :user}
+    end
+
+    test "rejects non-hexadecimal characters" do
+      router = Router.new() |> Router.route("user/{id:hex}/", :user)
+
+      assert Router.match(router, "user/0aG9/") == {:error, :no_match}
+    end
+
+    test "rejects an empty hexadecimal-filtered trailing variable" do
+      router = Router.new() |> Router.route("user/{id:hex}", :user)
 
       assert Router.match(router, "user/") == {:error, :no_match}
     end
