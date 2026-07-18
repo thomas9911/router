@@ -8,16 +8,29 @@ defmodule RouterTest do
     end
 
     test "parses a single variable" do
-      assert Router.parse("hallo/{app_id}") == [text: "hallo/", var: "app_id"]
+      assert Router.parse("hallo/{app_id}") == [
+               text: "hallo/",
+               var: %{name: "app_id", filter: nil}
+             ]
     end
 
     test "parses multiple variables separated by text" do
       assert Router.parse("hallo/{a}/{b}") ==
-               [text: "hallo/", var: "a", text: "/", var: "b"]
+               [
+                 text: "hallo/",
+                 var: %{name: "a", filter: nil},
+                 text: "/",
+                 var: %{name: "b", filter: nil}
+               ]
     end
 
     test "parses a variable in the middle of text" do
-      assert Router.parse("a{x}b") == [text: "a", var: "x", text: "b"]
+      assert Router.parse("a{x}b") == [text: "a", var: %{name: "x", filter: nil}, text: "b"]
+    end
+
+    test "parses a variable filter as an atom" do
+      assert Router.parse("user/{id:int}/") ==
+               [text: "user/", var: %{name: "id", filter: :int}, text: "/"]
     end
 
     test "raises on a stray closing brace with no open variable" do
@@ -33,12 +46,24 @@ defmodule RouterTest do
     end
 
     test "parses a variable that starts the template" do
-      assert Router.parse("{a}") == [var: "a"]
+      assert Router.parse("{a}") == [var: %{name: "a", filter: nil}]
     end
 
     test "raises on a stray closing brace as the very first character" do
       assert_raise RuntimeError, "invalid end", fn ->
         Router.parse("}a")
+      end
+    end
+
+    test "raises on an invalid filtered variable" do
+      assert_raise RuntimeError, "invalid variable", fn ->
+        Router.parse("{id:}")
+      end
+    end
+
+    test "raises on an unknown filter" do
+      assert_raise RuntimeError, "unknown filter", fn ->
+        Router.parse("{id:uuid}")
       end
     end
   end
@@ -70,6 +95,30 @@ defmodule RouterTest do
       router = Router.new() |> Router.route("a{x}b", :mid)
 
       assert Router.match(router, "aFOOb") == {:ok, %{"x" => "FOO"}, :mid}
+    end
+
+    test "matches an integer-filtered variable and casts it to an integer" do
+      router = Router.new() |> Router.route("user/{id:int}/", :user)
+
+      assert Router.match(router, "user/42/") == {:ok, %{"id" => 42}, :user}
+    end
+
+    test "rejects a non-integer for an integer-filtered variable" do
+      router = Router.new() |> Router.route("user/{id:int}/", :user)
+
+      assert Router.match(router, "user/abc/") == {:error, :no_match}
+    end
+
+    test "rejects an empty integer-filtered trailing variable" do
+      router = Router.new() |> Router.route("user/{id:int}", :user)
+
+      assert Router.match(router, "user/") == {:error, :no_match}
+    end
+
+    test "raises while routing with an unknown filter" do
+      assert_raise RuntimeError, "unknown filter", fn ->
+        Router.new() |> Router.route("user/{id:uuid}", :user)
+      end
     end
 
     test "returns an error tuple when nothing matches" do

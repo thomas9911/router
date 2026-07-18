@@ -14,6 +14,12 @@ defmodule Router do
   ```
 
   ```elixir
+      iex> router = Router.new() |> Router.route("users/{id:int}", :show_user)
+      iex> Router.match(router, "users/42")
+      {:ok, %{"id" => 42}, :show_user}
+  ```
+
+  ```elixir
       iex> router = Router.new()
       ...>          |> Router.route("users/{id}", fn arguments -> "fetch user with " <> inspect(arguments) end)
       ...>          |> Router.route("posts/{id}", fn arguments -> "fetch post with " <> inspect(arguments) end)
@@ -30,14 +36,29 @@ defmodule Router do
   between two equally dynamic overlapping routes (e.g. the same template
   registered twice) does registration order act as the tie-break: the
   one registered first wins.
+
+  Variables may also declare a filter via `{name:filter}`. Supported
+  filters are normalized to atoms internally. The built-in `int` filter
+  only matches segments that parse as integers and returns them as
+  integers in the match result.
   """
 
   defstruct root: %{literal: %{}, vars: [], accept: :none}
 
-  @type token :: {:text, String.t()} | {:var, String.t()}
+  @type filter :: :int
+  @type var_token :: %{name: String.t(), filter: filter() | nil}
+  @type token :: {:text, String.t()} | {:var, var_token()}
+  @type capture_value :: String.t() | integer()
   @type trie_node :: %{
           literal: %{String.t() => trie_node()},
-          vars: [%{name: String.t(), boundary: String.t() | nil, node: trie_node()}],
+          vars: [
+            %{
+              name: String.t(),
+              filter: filter() | nil,
+              boundary: String.t() | nil,
+              node: trie_node()
+            }
+          ],
           accept: :none | {:value, any()}
         }
   @type t :: %__MODULE__{root: trie_node()}
@@ -48,7 +69,8 @@ defmodule Router do
 
   @doc """
   Registers `value` under `path`, a template that may contain
-  `{variable_name}` placeholders.
+  `{variable_name}` placeholders, with optional `{variable_name:filter}`
+  filters.
   """
   @spec route(t(), String.t(), any()) :: t()
   def route(%__MODULE__{root: root} = router, path, value) do
@@ -58,8 +80,9 @@ defmodule Router do
   @doc """
   Tokenizes a path template into `{:text, _}` and `{:var, _}` parts.
 
-  Raises if braces are unbalanced or two variables appear with nothing
-  between them (e.g. `"{a}{b}"`).
+  Raises if braces are unbalanced, a variable is malformed, an unknown
+  filter is used, or two variables appear with nothing between them
+  (e.g. `"{a}{b}"`).
   """
   @spec parse(String.t()) :: [token()]
   def parse(path) do
@@ -69,7 +92,8 @@ defmodule Router do
   @doc """
   Matches `path` against the registered routes and returns the first hit.
   """
-  @spec match(t(), String.t()) :: {:ok, %{String.t() => String.t()}, any()} | {:error, :no_match}
+  @spec match(t(), String.t()) ::
+          {:ok, %{String.t() => capture_value()}, any()} | {:error, :no_match}
   def match(%__MODULE__{root: root}, path) do
     case match_node(root, String.graphemes(path)) do
       {:ok, vars, value} -> {:ok, vars, value}
@@ -99,7 +123,7 @@ defmodule Router do
   defp do_parse(<<char, rest::bytes>>, [{:var, name} | acc]) do
     cond do
       char == ?{ -> raise "invalid start"
-      char == ?} -> do_parse(rest, [{:text, ""}, {:var, name} | acc])
+      char == ?} -> do_parse(rest, [{:text, ""}, {:var, parse_var(name)} | acc])
       true -> do_parse(rest, [{:var, <<name::bytes, char>>} | acc])
     end
   end
@@ -117,19 +141,19 @@ defmodule Router do
     insert_chars(node, String.graphemes(text), rest, value)
   end
 
-  defp insert(_node, [{:var, _name}, {:text, ""} | _rest], _value) do
+  defp insert(_node, [{:var, _var}, {:text, ""} | _rest], _value) do
     raise "invalid template, variables cannot be after each other"
   end
 
-  defp insert(node, [{:var, name}, {:text, next} | rest], value) do
+  defp insert(node, [{:var, %{name: name, filter: filter}}, {:text, next} | rest], value) do
     boundary = String.first(next)
     target = insert(empty_node(), [{:text, next} | rest], value)
-    %{node | vars: node.vars ++ [%{name: name, boundary: boundary, node: target}]}
+    %{node | vars: node.vars ++ [%{name: name, filter: filter, boundary: boundary, node: target}]}
   end
 
-  defp insert(node, [{:var, name}], value) do
+  defp insert(node, [{:var, %{name: name, filter: filter}}], value) do
     target = insert(empty_node(), [], value)
-    %{node | vars: node.vars ++ [%{name: name, boundary: nil, node: target}]}
+    %{node | vars: node.vars ++ [%{name: name, filter: filter, boundary: nil, node: target}]}
   end
 
   defp insert_chars(node, [], remaining_tokens, value), do: insert(node, remaining_tokens, value)
@@ -162,13 +186,22 @@ defmodule Router do
 
   defp match_var_edges([], _chars), do: :no_match
 
-  defp match_var_edges([%{name: name, boundary: boundary, node: target} | rest_edges], chars) do
+  defp match_var_edges(
+         [%{name: name, filter: filter, boundary: boundary, node: target} | rest_edges],
+         chars
+       ) do
     case consume_var(chars, boundary) do
       {:ok, captured, remaining} ->
-        case match_node(target, remaining) do
-          {:ok, vars, value} ->
-            vars = if captured == "", do: vars, else: Map.put(vars, name, captured)
-            {:ok, vars, value}
+        case cast_capture(captured, filter) do
+          {:ok, cast_value} ->
+            case match_node(target, remaining) do
+              {:ok, vars, value} ->
+                vars = if captured == "", do: vars, else: Map.put(vars, name, cast_value)
+                {:ok, vars, value}
+
+              :no_match ->
+                match_var_edges(rest_edges, chars)
+            end
 
           :no_match ->
             match_var_edges(rest_edges, chars)
@@ -189,4 +222,29 @@ defmodule Router do
   end
 
   defp consume_var([char | rest], boundary, acc), do: consume_var(rest, boundary, [char | acc])
+
+  defp parse_var(raw) do
+    case String.split(raw, ":", parts: 2) do
+      [name] when name != "" ->
+        %{name: name, filter: nil}
+
+      [name, filter] when name != "" and filter != "" ->
+        %{name: name, filter: parse_filter(filter)}
+
+      _ ->
+        raise "invalid variable"
+    end
+  end
+
+  defp parse_filter("int"), do: :int
+  defp parse_filter(_filter), do: raise("unknown filter")
+
+  defp cast_capture(captured, nil), do: {:ok, captured}
+
+  defp cast_capture(captured, :int) do
+    case Integer.parse(captured) do
+      {value, ""} -> {:ok, value}
+      _ -> :no_match
+    end
+  end
 end
