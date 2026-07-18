@@ -191,27 +191,17 @@ defmodule Router do
          [%{name: name, filter: filter, boundary: boundary, node: target} | rest_edges],
          chars
        ) do
-    case consume_var(chars, boundary) do
-      {:ok, captured, remaining} ->
-        case cast_capture(captured, filter) do
-          {:ok, cast_value} ->
-            case match_node(target, remaining) do
-              {:ok, vars, value} ->
-                vars = if captured == "", do: vars, else: Map.put(vars, name, cast_value)
-                {:ok, vars, value}
-
-              :no_match ->
-                match_var_edges(rest_edges, chars)
-            end
-
-          :no_match ->
-            match_var_edges(rest_edges, chars)
-        end
-
-      :no_match ->
-        match_var_edges(rest_edges, chars)
+    with {:ok, captured, remaining} <- consume_var(chars, boundary),
+         {:ok, cast_value} <- cast_capture(captured, filter),
+         {:ok, vars, value} <- match_node(target, remaining) do
+      {:ok, put_capture(vars, name, captured, cast_value), value}
+    else
+      _ -> match_var_edges(rest_edges, chars)
     end
   end
+
+  defp put_capture(vars, _name, "", _value), do: vars
+  defp put_capture(vars, name, _captured, value), do: Map.put(vars, name, value)
 
   defp consume_var(chars, nil), do: {:ok, Enum.join(chars), []}
   defp consume_var(chars, boundary), do: consume_var(chars, boundary, [])
@@ -226,14 +216,24 @@ defmodule Router do
 
   defp parse_var(raw) do
     case String.split(raw, ":", parts: 2) do
-      [name] when name != "" ->
+      [name] ->
+        name = String.trim(name)
+
+        if name == "" do
+          raise "invalid variable"
+        end
+
         %{name: name, filter: nil}
 
-      [name, filter] when name != "" and filter != "" ->
-        %{name: name, filter: parse_filter(filter)}
+      [name, filter] ->
+        name = String.trim(name)
+        filter = String.trim(filter)
 
-      _ ->
-        raise "invalid variable"
+        if name == "" or filter == "" do
+          raise "invalid variable"
+        end
+
+        %{name: name, filter: parse_filter(filter)}
     end
   end
 

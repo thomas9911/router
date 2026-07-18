@@ -39,6 +39,11 @@ defmodule RouterTest do
                [text: "user/", var: %{name: "id", filter: :hex}, text: "/"]
     end
 
+    test "ignores whitespace around a variable filter" do
+      assert Router.parse("user/{ id : int }/") ==
+               [text: "user/", var: %{name: "id", filter: :int}, text: "/"]
+    end
+
     test "raises on a stray closing brace with no open variable" do
       assert_raise RuntimeError, "invalid end", fn ->
         Router.parse("a}")
@@ -105,6 +110,12 @@ defmodule RouterTest do
 
     test "matches an integer-filtered variable and casts it to an integer" do
       router = Router.route(Router.new(), "user/{id:int}/", :user)
+
+      assert Router.match(router, "user/42/") == {:ok, %{"id" => 42}, :user}
+    end
+
+    test "matches a variable filter with surrounding whitespace" do
+      router = Router.route(Router.new(), "user/{ id : int }/", :user)
 
       assert Router.match(router, "user/42/") == {:ok, %{"id" => 42}, :user}
     end
