@@ -4,6 +4,29 @@ defmodule RouterTest do
   doctest Router
 
   describe "route/3 and match/2" do
+    test "matches tagged routes independently" do
+      router =
+        Router.new()
+        |> Router.route({:get, "users/{user_id:int}"}, :get_user)
+        |> Router.route({:get, "users"}, :list_users)
+        |> Router.route({:post, "users"}, :create_user)
+
+      assert Router.match(router, {:get, "users/42"}) == {:ok, %{"user_id" => 42}, :get_user}
+      assert Router.match(router, {:get, "users"}) == {:ok, %{}, :list_users}
+      assert Router.match(router, {:post, "users"}) == {:ok, %{}, :create_user}
+      assert Router.match(router, {:post, "users/42"}) == {:error, :no_match}
+    end
+
+    test "keeps untagged routes matched by a path string" do
+      router =
+        Router.new()
+        |> Router.route("users", :untagged)
+        |> Router.route({:get, "users"}, :tagged)
+
+      assert Router.match(router, "users") == {:ok, %{}, :untagged}
+      assert Router.match(router, {:get, "users"}) == {:ok, %{}, :tagged}
+    end
+
     test "matches a static route" do
       router = Router.route(Router.new(), "hallo/xd", 3)
 

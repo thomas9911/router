@@ -19,6 +19,20 @@ Router.match(router, "users/abc/posts")
 #=> {:error, :no_match}
 ```
 
+
+Routes can also be tagged and matched with the same tag:
+
+```elixir
+router =
+  Router.new()
+  |> Router.route({:get, "users/{id:int}"}, :get_user)
+  |> Router.route({:get, "users"}, :list_users)
+  |> Router.route({:post, "users"}, :create_user)
+
+Router.match(router, {:get, "users/42"})
+#=> {:ok, %{"id" => 42}, :get_user}
+```
+
 Variables can optionally declare filters with `{name:filter}`. Supported
 filters are validated when the route is parsed and normalized to atoms
 internally. The built-in `int` filter only matches segments that parse as
