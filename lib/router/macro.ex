@@ -1,8 +1,10 @@
 defmodule Router.Macro do
   @moduledoc """
-  Generate a module similar to Plug.Router that has a function name to handle the dispatching to functions.
+  Compile-time router DSL for defining tagged route handlers.
 
-  For example:
+  `macro_name`, `match_name`, and `no_match` customize the generated route
+  macro, dispatcher, and unmatched result. Route captures are available as
+  variables in the block, and the optional `context` argument defaults to `%{}`.
 
   ```elixir
   iex> defmodule Implementation do
@@ -29,7 +31,6 @@ defmodule Router.Macro do
   iex> Implementation.execute({:remove, "users"}, %{"name" => "testing"})
   {:error, :no_match}
   ```
-
   """
 
   @doc false

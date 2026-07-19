@@ -21,7 +21,8 @@ defmodule Router.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:styler, "~> 1.11", only: [:dev, :test], runtime: false}
+      {:styler, "~> 1.11", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false, warn_if_outdated: true}
     ]
   end
 end

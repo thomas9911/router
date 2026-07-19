@@ -1,23 +1,10 @@
 defmodule Router.Trie do
   @moduledoc false
 
-  @type capture_value :: String.t() | integer()
-  @type trie_node :: %{
-          literal: %{String.t() => trie_node()},
-          vars: [var_edge()],
-          accept: :none | {:value, any()}
-        }
-  @type var_edge :: %{
-          name: String.t(),
-          filter: Router.Parser.filter() | nil,
-          boundary: String.t() | nil,
-          node: trie_node()
-        }
-
-  @spec new() :: trie_node()
+  @spec new() :: Router.trie_node()
   def new, do: empty_node()
 
-  @spec insert(trie_node(), [Router.Parser.token()], any()) :: node()
+  @spec insert(Router.trie_node(), [Router.token()], Router.capture_value()) :: Router.trie_node()
   def insert(node, [], value) do
     case node.accept do
       :none -> %{node | accept: {:value, value}}
@@ -44,7 +31,7 @@ defmodule Router.Trie do
     %{node | vars: node.vars ++ [%{name: name, filter: filter, boundary: nil, node: target}]}
   end
 
-  @spec match(trie_node(), [String.t()]) :: {:ok, map(), any()} | :no_match
+  @spec match(Router.trie_node(), [String.t()]) :: {:ok, map(), any()} | :no_match
   def match(node, chars), do: match_node(node, chars)
 
   defp empty_node, do: %{literal: %{}, vars: [], accept: :none}

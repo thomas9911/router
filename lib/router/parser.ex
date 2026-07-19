@@ -1,11 +1,7 @@
 defmodule Router.Parser do
   @moduledoc false
 
-  @type filter :: :int | :hex | {:hex, pos_integer()}
-  @type var_token :: %{name: String.t(), filter: filter() | nil}
-  @type token :: {:text, String.t()} | {:var, var_token()}
-
-  @spec parse(String.t()) :: [token()]
+  @spec parse(String.t()) :: [Router.token()]
   def parse(path), do: do_parse(path, [])
 
   defp do_parse("", [{:text, ""} | rest]), do: Enum.reverse(rest)

@@ -46,13 +46,28 @@ defmodule Router do
   Routes may optionally be tagged, for example `{:get, "users/{id}"}`.
   Tagged routes are matched with `{:get, "users/42"}`; untagged routes
   continue to be matched with a path string.
+
+  For the compile-time routing DSL, see `Router.Macro`.
   """
 
   defstruct root: Router.Trie.new(), tagged: %{}
 
   @type tag :: atom()
-  @type capture_value :: Router.Trie.capture_value()
-  @type trie_node :: Router.Trie.trie_node()
+  @type filter :: :int | :hex | {:hex, pos_integer()}
+  @type var_token :: %{name: String.t(), filter: filter() | nil}
+  @type token :: {:text, String.t()} | {:var, var_token()}
+  @type capture_value :: String.t() | integer()
+  @type trie_node :: %{
+          literal: %{String.t() => trie_node()},
+          vars: [trie_var_edge()],
+          accept: :none | {:value, any()}
+        }
+  @type trie_var_edge :: %{
+          name: String.t(),
+          filter: filter() | nil,
+          boundary: String.t() | nil,
+          node: trie_node()
+        }
   @type t :: %__MODULE__{root: trie_node(), tagged: %{tag() => trie_node()}}
 
   @doc "Builds an empty router."
