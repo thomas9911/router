@@ -41,10 +41,32 @@ The `hex` filter matches non-empty segments containing only `0-9`, `a-f`, or
 `A-F`, and successful matches are returned as strings.
 A fixed length can be specified, for example `{token:hex(8)}`.
 
+## DSL
+
+`Router.Macro` builds the router for you via `use`, letting you define tagged
+routes as functions instead of building the router by hand:
+
+```elixir
+defmodule MyRouter do
+  use Router.Macro, macro_name: :get, match_name: :call, no_match: {:error, :not_found}
+
+  get :show_user, "users/{id:int}" do
+    "user #{id}"
+  end
+end
+
+MyRouter.call({:show_user, "users/42"})
+#=> "user 42"
+```
+
+Route captures are bound as variables in the block, and an optional
+`context` argument (default `%{}`) is available too. See `Router.Macro` for
+details.
+
 ## Tip
 
 Consider building your router as a module attribute (`@router = ...`) when you know the paths upfront, rather than in a function.
-This will build it once at compile time instead of rebuilding it on every call.
+This will build it once at compile time instead of rebuilding it on every call. Or use the `Router.Macro` DSL this will do it for you.
 
 ## Installation
 
